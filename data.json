@@ -1,0 +1,11 @@
+[
+    { "student": "Alice", "studyHours": 2, "examScore": 55 },
+    { "student": "Bob", "studyHours": 4, "examScore": 65 },
+    { "student": "Charlie", "studyHours": 1, "examScore": 50 },
+    { "student": "David", "studyHours": 5, "examScore": 80 },
+    { "student": "Eve", "studyHours": 3, "examScore": 60 },
+    { "student": "Frank", "studyHours": 6, "examScore": 85 },
+    { "student": "Grace", "studyHours": 7, "examScore": 90 },
+    { "student": "John", "studyHours": 8, "examScore": 95 }
+  ]
+  
