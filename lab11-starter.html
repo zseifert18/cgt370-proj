@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Lab 11 – NBA Player Cards</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f1923;
+      color: #fff;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #17408b;
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 3px solid #c9082a;
+    }
+
+    .controls {
+      display: flex;
+      gap: 1rem;
+      padding: 1.2rem 2rem;
+      background: #162230;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .controls label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      opacity: 0.6;
+      margin-right: 0.3rem;
+    }
+
+    .controls select {
+      background: #0f1923;
+      color: #fff;
+      border: 1px solid #334;
+      padding: 0.4rem 0.8rem;
+      border-radius: 4px;
+    }
+
+    #count { margin-left: auto; font-size: 0.85rem; opacity: 0.5; }
+
+    #cards-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.2rem;
+      padding: 2rem;
+    }
+
+    .player-card {
+      background: #1a2a3a;
+      border-radius: 10px;
+      padding: 1.2rem;
+      width: 200px;
+      border-top: 4px solid #c9082a;
+    }
+
+    .player-name {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 0.3rem;
+    }
+
+    .position-badge {
+      display: inline-block;
+      background: #17408b;
+      font-size: 0.7rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 20px;
+      margin-bottom: 0.8rem;
+      text-transform: uppercase;
+    }
+
+    .player-team {
+      font-size: 0.75rem;
+      opacity: 0.5;
+      margin-bottom: 0.8rem;
+      text-transform: uppercase;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      padding: 0.25rem 0;
+      border-bottom: 1px solid #ffffff10;
+    }
+
+    .stat-row:last-child { border-bottom: none; }
+
+    .stat-label { opacity: 0.55; }
+    .stat-value { font-weight: 600; }
+
+    #no-results {
+      color: #ffffff40;
+      font-size: 1rem;
+      padding: 2rem;
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h1>NBA Player Stats</h1>
+  <span>Lab 11 · CGT 370</span>
+</header>
+
+<div class="controls">
+  <div>
+    <label>Team</label>
+    <select id="filter-team"></select>
+  </div>
+
+  <div>
+    <label>Position</label>
+    <select id="filter-pos"></select>
+  </div>
+
+  <div>
+    <label>Sort by</label>
+    <select id="sort-by">
+      <option value="ppg">Points</option>
+      <option value="rpg">Rebounds</option>
+      <option value="apg">Assists</option>
+    </select>
+  </div>
+
+  <span id="count"></span>
+</div>
+
+<div id="cards-container"></div>
+<div id="no-results">No players match your filters.</div>
+
+<script>
+
+const players = [
+  { id:1, name:"LeBron James", team:"Lakers", position:"SF", ppg:25.7, rpg:7.3, apg:8.3 },
+  { id:2, name:"Stephen Curry", team:"Warriors", position:"PG", ppg:26.4, rpg:4.5, apg:5.1 },
+  { id:3, name:"Kevin Durant", team:"Suns", position:"SF", ppg:27.1, rpg:6.7, apg:5.0 },
+  { id:4, name:"Giannis A.", team:"Bucks", position:"PF", ppg:30.4, rpg:11.5, apg:6.5 },
+  { id:5, name:"Nikola Jokic", team:"Nuggets", position:"C", ppg:26.4, rpg:12.4, apg:7.9 },
+  { id:6, name:"Luka Doncic", team:"Mavericks", position:"PG", ppg:32.4, rpg:8.6, apg:9.8 },
+  { id:7, name:"Joel Embiid", team:"76ers", position:"C", ppg:34.7, rpg:11.0, apg:5.6 },
+  { id:8, name:"Jayson Tatum", team:"Celtics", position:"SF", ppg:26.9, rpg:8.1, apg:4.9 },
+  { id:9, name:"Devin Booker", team:"Suns", position:"SG", ppg:27.8, rpg:4.5, apg:6.9 },
+  { id:10, name:"Anthony Davis", team:"Lakers", position:"C", ppg:24.7, rpg:12.6, apg:3.5 }
+];
+
+// Dropdown population
+const teams = ["all", ...new Set(players.map(d => d.team))];
+const positions = ["all", ...new Set(players.map(d => d.position))];
+
+d3.select("#filter-team")
+  .selectAll("option")
+  .data(teams)
+  .join("option")
+  .attr("value", d => d)
+  .text(d => d === "all" ? "All Teams" : d);
+
+d3.select("#filter-pos")
+  .selectAll("option")
+  .data(positions)
+  .join("option")
+  .attr("value", d => d)
+  .text(d => d === "all" ? "All Positions" : d);
+
+const statKeys = [
+  { key:"ppg", label:"Points" },
+  { key:"rpg", label:"Rebounds" },
+  { key:"apg", label:"Assists" }
+];
+
+function render() {
+
+  const teamVal = d3.select("#filter-team").property("value");
+  const posVal = d3.select("#filter-pos").property("value");
+  const sortKey = d3.select("#sort-by").property("value");
+
+  let filtered = players
+    .filter(d => teamVal === "all" || d.team === teamVal)
+    .filter(d => posVal === "all" || d.position === posVal)
+    .sort((a,b) => b[sortKey] - a[sortKey]);
+
+  d3.select("#count").text(`${filtered.length} player(s)`);
+  d3.select("#no-results").style("display", filtered.length ? "none" : "block");
+
+  const cards = d3.select("#cards-container")
+    .selectAll(".player-card")
+    .data(filtered, d => d.id)
+    .join("div")
+    .attr("class","player-card");
+
+  cards.html("");
+
+  cards.append("div")
+    .attr("class","player-name")
+    .text(d => d.name);
+
+  cards.append("div")
+    .attr("class","position-badge")
+    .text(d => d.position);
+
+  cards.append("div")
+    .attr("class","player-team")
+    .text(d => d.team);
+
+  // Proper nested stats binding
+  cards.each(function(player){
+    const statRows = d3.select(this)
+      .selectAll(".stat-row")
+      .data(statKeys)
+      .join("div")
+      .attr("class","stat-row");
+
+    statRows.append("span")
+      .attr("class","stat-label")
+      .text(d => d.label);
+
+    statRows.append("span")
+      .attr("class","stat-value")
+      .text(d => player[d.key]);
+  });
+}
+
+d3.selectAll("#filter-team, #filter-pos, #sort-by")
+  .on("change", render);
+
+render();
+
+</script>
+</body>
+</html>
