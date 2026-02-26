@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Lab 12 – NBA Stats Chart</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f1923;
+      color: #fff;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #17408b;
+      padding: 1.5rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 3px solid #c9082a;
+    }
+
+    header h1 { font-size: 1.4rem; letter-spacing: 0.05em; text-transform: uppercase; }
+    header span { font-size: 0.85rem; opacity: 0.7; }
+
+    .controls {
+      display: flex;
+      gap: 1rem;
+      padding: 1.2rem 2rem;
+      background: #162230;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .controls label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      opacity: 0.6;
+      margin-right: 0.3rem;
+    }
+
+    .controls select {
+      background: #0f1923;
+      color: #fff;
+      border: 1px solid #334;
+      padding: 0.4rem 0.8rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    /* Two-panel layout */
+    .layout {
+      display: flex;
+      gap: 0;
+      height: calc(100vh - 130px);
+    }
+
+    /* Left: cards panel (from lab 11) */
+    .panel-cards {
+      width: 340px;
+      min-width: 340px;
+      overflow-y: auto;
+      padding: 1.2rem;
+      background: #0f1923;
+      border-right: 1px solid #1e2d3d;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+      align-content: flex-start;
+    }
+
+    .player-card {
+      background: #1a2a3a;
+      border-radius: 10px;
+      padding: 1rem;
+      width: 140px;
+      border-top: 4px solid #c9082a;
+    }
+
+    .player-name { font-size: 0.85rem; font-weight: 700; margin-bottom: 0.2rem; }
+    .player-team { font-size: 0.7rem; opacity: 0.5; margin-bottom: 0.6rem; text-transform: uppercase; }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      padding: 0.2rem 0;
+      border-bottom: 1px solid #ffffff10;
+    }
+    .stat-row:last-child { border-bottom: none; }
+    .stat-label { opacity: 0.55; }
+    .stat-value { font-weight: 600; }
+
+    .position-badge {
+      display: inline-block;
+      background: #17408b;
+      font-size: 0.65rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 20px;
+      margin-bottom: 0.6rem;
+      text-transform: uppercase;
+    }
+
+    /* Right: chart panel */
+    .panel-chart {
+      flex: 1;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .chart-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.4rem;
+      opacity: 0.8;
+    }
+
+    .chart-subtitle {
+      font-size: 0.8rem;
+      opacity: 0.4;
+      margin-bottom: 1.5rem;
+    }
+
+    .stat-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .stat-tab {
+      padding: 0.35rem 1rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      border: 1px solid #334;
+      background: transparent;
+      color: #fff;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .stat-tab.active {
+      background: #c9082a;
+      border-color: #c9082a;
+    }
+
+    #chart-svg {
+      flex: 1;
+      width: 100%;
+    }
+
+    /* SVG text and axis styling */
+    .axis text {
+      fill: #ffffff80;
+      font-size: 11px;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    .axis line,
+    .axis path {
+      stroke: #ffffff20;
+    }
+
+    .bar { cursor: pointer; }
+    .bar:hover { opacity: 0.8; }
+
+    .bar-label {
+      fill: #ffffffaa;
+      font-size: 10px;
+    }
+
+    .gridline {
+      stroke: #ffffff10;
+      stroke-dasharray: 3,3;
+    }
+
+    #no-results {
+      color: #ffffff30;
+      font-size: 0.9rem;
+      padding: 1rem 0;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>NBA Player Stats</h1>
+  <span>Lab 12 · CGT 370</span>
+</header>
+
+<div class="controls">
+  <div>
+    <label for="filter-team">Team</label>
+    <select id="filter-team"></select>
+  </div>
+  <div>
+    <label for="filter-pos">Position</label>
+    <select id="filter-pos"></select>
+  </div>
+  <span style="font-size:0.8rem;opacity:0.4;margin-left:auto" id="count"></span>
+</div>
+
+<div class="layout">
+
+  <!-- Left: player cards -->
+  <div class="panel-cards" id="cards-container"></div>
+
+  <!-- Right: bar chart -->
+  <div class="panel-chart">
+    <div class="chart-title">Player Comparison</div>
+    <div class="chart-subtitle">Select a stat to compare filtered players</div>
+
+    <div class="stat-tabs">
+      <button class="stat-tab active" data-stat="ppg">Points</button>
+      <button class="stat-tab" data-stat="rpg">Rebounds</button>
+      <button class="stat-tab" data-stat="apg">Assists</button>
+    </div>
+
+    <div id="no-results">No players match your filters.</div>
+    <svg id="chart-svg" style="width:100%; height:400px;"></svg>
+  </div>
+
+</div>
+
+<script>
+  const players = [
+    { id: 1,  name: "LeBron James",       team: "Lakers",    position: "SF", ppg: 25.7, rpg: 7.3,  apg: 8.3  },
+    { id: 2,  name: "Stephen Curry",      team: "Warriors",  position: "PG", ppg: 26.4, rpg: 4.5,  apg: 5.1  },
+    { id: 3,  name: "Kevin Durant",       team: "Suns",      position: "SF", ppg: 27.1, rpg: 6.7,  apg: 5.0  },
+    { id: 4,  name: "Giannis A.",         team: "Bucks",     position: "PF", ppg: 30.4, rpg: 11.5, apg: 6.5  },
+    { id: 5,  name: "Nikola Jokic",       team: "Nuggets",   position: "C",  ppg: 26.4, rpg: 12.4, apg: 7.9  },
+    { id: 6,  name: "Luka Doncic",        team: "Mavericks", position: "PG", ppg: 32.4, rpg: 8.6,  apg: 9.8  },
+    { id: 7,  name: "Joel Embiid",        team: "76ers",     position: "C",  ppg: 34.7, rpg: 11.0, apg: 5.6  },
+    { id: 8,  name: "Jayson Tatum",       team: "Celtics",   position: "SF", ppg: 26.9, rpg: 8.1,  apg: 4.9  },
+    { id: 9,  name: "Devin Booker",       team: "Suns",      position: "SG", ppg: 27.8, rpg: 4.5,  apg: 6.9  },
+    { id: 10, name: "Anthony Davis",      team: "Lakers",    position: "C",  ppg: 24.7, rpg: 12.6, apg: 3.5  },
+    { id: 11, name: "Damian Lillard",     team: "Bucks",     position: "PG", ppg: 24.3, rpg: 4.4,  apg: 7.0  },
+    { id: 12, name: "Kawhi Leonard",      team: "Clippers",  position: "SF", ppg: 23.7, rpg: 6.1,  apg: 3.6  },
+    { id: 13, name: "Trae Young",         team: "Hawks",     position: "PG", ppg: 25.7, rpg: 3.0,  apg: 10.8 },
+    { id: 14, name: "Ja Morant",          team: "Grizzlies", position: "PG", ppg: 26.2, rpg: 5.9,  apg: 8.1  },
+    { id: 15, name: "Bam Adebayo",        team: "Heat",      position: "C",  ppg: 19.3, rpg: 10.4, apg: 3.2  },
+    { id: 16, name: "Zion Williamson",    team: "Pelicans",  position: "PF", ppg: 22.9, rpg: 5.8,  apg: 4.6  },
+    { id: 17, name: "Donovan Mitchell",   team: "Cavaliers", position: "SG", ppg: 28.1, rpg: 4.4,  apg: 6.1  },
+    { id: 18, name: "Karl-Anthony Towns", team: "Knicks",    position: "C",  ppg: 21.4, rpg: 8.3,  apg: 3.0  },
+    { id: 19, name: "Jimmy Butler",       team: "Heat",      position: "SF", ppg: 20.8, rpg: 5.3,  apg: 5.0  },
+    { id: 20, name: "Paul George",        team: "76ers",     position: "SF", ppg: 22.6, rpg: 5.2,  apg: 3.5  }
+  ];
+
+  const statKeys = [
+    { key: "ppg", label: "Points" },
+    { key: "rpg", label: "Rebounds" },
+    { key: "apg", label: "Assists" }
+  ];
+
+  let activeStat = "ppg";
+
+  // Populate dropdowns
+  const teams = ["all", ...new Set(players.map(d => d.team))].sort();
+  const positions = ["all", ...new Set(players.map(d => d.position))].sort();
+
+  d3.select("#filter-team").selectAll("option")
+    .data(teams).join("option")
+    .attr("value", d => d)
+    .text(d => d === "all" ? "All Teams" : d);
+
+  d3.select("#filter-pos").selectAll("option")
+    .data(positions).join("option")
+    .attr("value", d => d)
+    .text(d => d === "all" ? "All Positions" : d);
+
+  const margin = { top: 20, right: 30, bottom: 90, left: 50 };
+  const svgEl = document.getElementById("chart-svg");
+  const svg = d3.select("#chart-svg");
+
+  const getChartDims = () => {
+    const w = svgEl.clientWidth || 600;
+    const h = svgEl.clientHeight || 400;
+    return {
+      width: w - margin.left - margin.right,
+      height: h - margin.top - margin.bottom
+    };
+  };
+
+  const render = () => {
+    const teamVal = d3.select("#filter-team").property("value");
+    const posVal = d3.select("#filter-pos").property("value");
+
+    let filtered = players
+      .filter(d => teamVal === "all" || d.team === teamVal)
+      .filter(d => posVal === "all" || d.position === posVal)
+      .sort((a, b) => b[activeStat] - a[activeStat]);
+
+    d3.select("#count").text(`${filtered.length} player${filtered.length !== 1 ? "s" : ""}`);
+    d3.select("#no-results").style("display", filtered.length === 0 ? "block" : "none");
+    d3.select("#chart-svg").style("display", filtered.length === 0 ? "none" : "block");
+
+    // Player cards
+    const cards = d3.select("#cards-container")
+      .selectAll(".player-card")
+      .data(filtered, d => d.id)
+      .join(
+        enter => enter.append("div").attr("class", "player-card"),
+        update => update,
+        exit => exit.remove()
+      );
+
+    cards.html("");
+    cards.append("div").attr("class", "player-name").text(d => d.name);
+    cards.append("div").attr("class", "position-badge").text(d => d.position);
+    cards.append("div").attr("class", "player-team").text(d => d.team);
+
+    const statRows = cards.selectAll(".stat-row")
+      .data(d => statKeys.map(s => ({ label: s.label, value: d[s.key] })))
+      .join("div").attr("class", "stat-row");
+    statRows.append("span").attr("class", "stat-label").text(d => d.label);
+    statRows.append("span").attr("class", "stat-value").text(d => d.value.toFixed(1));
+
+    // Clear previous chart
+    svg.selectAll("*").remove();
+    if (filtered.length === 0) return;
+
+    const { width, height } = getChartDims();
+
+    const g = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // ── Scales ──────────────────────────────────────────────────────────
+    const xScale = d3.scaleBand()
+      .domain(filtered.map(d => d.name))
+      .range([0, width])
+      .padding(0.2);
+
+    const maxStatValue = d3.max(filtered, d => d[activeStat]) || 0;
+    const yScale = d3.scaleLinear()
+      .domain([0, maxStatValue * 1.1])
+      .range([height, 0]);
+
+    // ── Gridlines ───────────────────────────────────────────────────────
+    g.append("g").attr("class", "gridlines")
+      .selectAll("line")
+      .data(yScale.ticks(5))
+      .join("line")
+      .attr("class", "gridline")
+      .attr("x1", 0)
+      .attr("x2", width)
+      .attr("y1", d => yScale(d))
+      .attr("y2", d => yScale(d));
+
+    // ── Bars ─────────────────────────────────────────────────────────────
+    g.selectAll(".bar")
+      .data(filtered, d => d.id)
+      .join("rect")
+      .attr("class", "bar")
+      .attr("fill", "#c9082a")
+      .attr("x", d => xScale(d.name))
+      .attr("width", xScale.bandwidth())
+      .attr("y", d => yScale(d[activeStat]))
+      .attr("height", d => height - yScale(d[activeStat]))
+      .on("mouseover", () => { d3.select(d3.event.currentTarget).attr("opacity", 0.8); })
+      .on("mouseout", () => { d3.select(d3.event.currentTarget).attr("opacity", 1); });
+
+    // ── Value labels above bars ──────────────────────────────────────────
+    g.selectAll(".bar-label")
+      .data(filtered, d => d.id)
+      .join("text")
+      .attr("class", "bar-label")
+      .attr("text-anchor", "middle")
+      .attr("x", d => xScale(d.name) + xScale.bandwidth() / 2)
+      .attr("y", d => yScale(d[activeStat]) - 5)
+      .text(d => d[activeStat].toFixed(1));
+
+    // ── Axes ─────────────────────────────────────────────────────────────
+    const xAxis = d3.axisBottom(xScale);
+    const yAxis = d3.axisLeft(yScale).ticks(5);
+
+    // X axis at bottom
+    g.append("g")
+      .attr("class", "axis")
+      .attr("transform", `translate(0, ${height})`)
+      .call(xAxis)
+      .selectAll("text")
+      .attr("transform", "rotate(-35)")
+      .attr("text-anchor", "end")
+      .attr("dx", "-0.5em")
+      .attr("dy", "0.5em");
+
+    // Y axis on the left
+    g.append("g")
+      .attr("class", "axis")
+      .call(yAxis);
+
+    // Y-axis label
+    g.append("text")
+      .attr("transform", "rotate(-90)")
+      .attr("x", -height / 2)
+      .attr("y", -40)
+      .attr("text-anchor", "middle")
+      .attr("fill", "#ffffff60")
+      .attr("font-size", "11px")
+      .text(statKeys.find(s => s.key === activeStat)?.label + " per game");
+  };
+
+  // Event listeners
+  d3.select("#filter-team").on("change", render);
+  d3.select("#filter-pos").on("change", render);
+
+  d3.selectAll(".stat-tab").on("click", function () {
+    d3.selectAll(".stat-tab").classed("active", false);
+    d3.select(this).classed("active", true);
+    activeStat = this.dataset.stat;
+    render();
+  });
+
+  window.addEventListener("resize", render);
+
+  // Initialize
+  render();
+</script>
+</body>
+</html>
